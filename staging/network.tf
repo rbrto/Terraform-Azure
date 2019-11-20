@@ -49,3 +49,10 @@ resource "azurerm_subnet" "aks" {
   # List of Service endpoints to associate with the subnet.
   service_endpoints = var.service_endpoints
 }
+
+# Grant AKS cluster access to use AKS Subnet 
+resource "azurerm_role_assignment" "aks" {
+  principal_id         = azuread_service_principal.aks.id
+  role_definition_name = "Network Contributor"
+  scope                = azurerm_subnet.aks.id
+}
