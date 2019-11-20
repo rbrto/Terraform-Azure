@@ -1,0 +1,125 @@
+.validate:template: &validate_definition
+  before_script:
+    - (cd $CI_ENVIRONMENT_NAME && terraform init -input=false -backend-config="access_key=$AZURERM_TF_STORAGE_ACCESS_KEY")
+  script:
+    - (cd $CI_ENVIRONMENT_NAME && terraform fmt -check=true -diff=true || ( echo >&2 "Canonical format and style doesn't match convention. Please fix (try running 'terraform fmt' locally)."; exit 3; ))
+    - (cd $CI_ENVIRONMENT_NAME && terraform validate)
+
+.plan:template: &plan_definition
+  before_script:
+    - (cd $CI_ENVIRONMENT_NAME && terraform init -input=false -backend-config="access_key=$AZURERM_TF_STORAGE_ACCESS_KEY")
+  script:
+    - (cd $CI_ENVIRONMENT_NAME && terraform plan -out=$CI_ENVIRONMENT_NAME-plan.tfplan -input=false)
+  artifacts:
+    name: plan
+    paths:
+      - $CI_ENVIRONMENT_NAME/$CI_ENVIRONMENT_NAME-plan.tfplan
+
+.apply:template: &apply_definition
+  before_script:
+    - (cd $CI_ENVIRONMENT_NAME && terraform init -input=false -backend-config="access_key=$AZURERM_TF_STORAGE_ACCESS_KEY")
+  script:
+    - (cd $CI_ENVIRONMENT_NAME && terraform apply -input=false $CI_ENVIRONMENT_NAME-plan.tfplan)
+  when: manual
+
+
+image:
+  name: hashicorp/terraform:light
+  entrypoint:
+    - '/usr/bin/env'
+    - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+variables:
+  TF_IN_AUTOMATION: "true"
+  ARM_CLIENT_ID: $AZURE_SERVICE_PRINCIPAL_USER
+  ARM_CLIENT_SECRET: $AZURE_SERVICE_PRINCIPAL_PASSWORD
+  ARM_SUBSCRIPTION_ID: $AZURE_SUBSCRIPTION_ID
+  ARM_TENANT_ID: $AZURE_TENANT_ID
+  TF_VAR_azurerm_resource_group_name: $AZURE_RESOURCEGROUP
+  TF_VAR_client_id: $AZURE_SERVICE_PRINCIPAL_USER
+  TF_VAR_tenant_id: $AZURE_TENANT_ID
+  TF_VAR_object_id: $AZURE_OBJECT_ID  
+  TF_VAR_client_secret: $AZURE_SERVICE_PRINCIPAL_PASSWORD
+  TF_VAR_azurerm_storage_account_name: $STORAGE_ACCOUNT_NAME  
+  TF_VAR_db_username: $DB_USERNAME
+  TF_VAR_db_password: $DB_PASSWORD
+
+cache:
+  paths:
+    - "*/.terraform"
+
+stages:
+  - validate
+  - build
+  - deploy
+
+
+################################
+# environment: Development
+################################
+
+validate_dev:
+  stage: validate
+  environment:
+    name: development
+  variables:
+    TF_VAR_environment: ${CI_ENVIRONMENT_NAME}
+    
+  <<: *validate_definition
+
+plan_dev:
+  stage: build
+  environment:
+    name: development
+  variables:
+    TF_VAR_environment: ${CI_ENVIRONMENT_NAME}
+
+  <<: *plan_definition
+
+apply_dev:
+  stage: deploy
+  environment:
+    name: development
+  variables:
+    TF_VAR_environment: ${CI_ENVIRONMENT_NAME}
+
+  <<: *apply_definition
+  dependencies:
+    - plan_dev
+  only:
+    - master
+
+################################
+# environment: Staging
+################################
+
+validate_staging:
+  stage: validate
+  environment:
+    name: staging
+  variables:
+    TF_VAR_environment: ${CI_ENVIRONMENT_NAME}
+    
+  <<: *validate_definition
+
+plan_staging:
+  stage: build
+  environment:
+    name: staging
+  variables:
+    TF_VAR_environment: ${CI_ENVIRONMENT_NAME}
+
+  <<: *plan_definition
+
+apply_staging:
+  stage: deploy
+  environment:
+    name: staging
+  variables:
+    TF_VAR_environment: ${CI_ENVIRONMENT_NAME}
+
+  <<: *apply_definition
+  dependencies:
+    - plan_staging
+  only:
+    - master
