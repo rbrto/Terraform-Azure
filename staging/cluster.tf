@@ -40,3 +40,26 @@ resource "azurerm_public_ip" "svl-ip" {
 
   depends_on = [module.aks_stage]
 }
+
+# Install Azure Key Vault Controller
+resource "helm_release" "key-vault-controller" {
+  name      = "key-vault-controller"
+  namespace = "default"
+
+  repository = "https://charts.spvapi.no"
+  chart      = "azure-key-vault-controller"
+
+  set {
+    name  = "installCrd"
+    value = "false"
+  }
+}
+
+# Install Azure Key Vault Injector
+resource "helm_release" "key-vault-injector" {
+  name      = "key-vault-injector"
+  namespace = "default"
+
+  repository = "https://charts.spvapi.no"
+  chart      = "azure-key-vault-env-injector"
+}
